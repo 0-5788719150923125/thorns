@@ -626,29 +626,33 @@ class PraxisTrainer(LightningModule):
         batch_size, num_tokens = batch.shape
         self.num_tokens += batch_size * num_tokens
 
-        # for epoch in range(epochs):
-        #     for X, Y in data_loader:
-        #         # standard training code
-        #         logits, loss = model(X, Y)
-        optimizer = self.optimizers()
-        loss.backward()
-        optimizer.step()
-        optimizer.zero_grad(set_to_none=True)
-        self.current_step += 1
-        k = 10
-        if self.current_step % k == k - 1:
-            # update hessian EMA
-            logits = self.model(input_ids=batch)["logits"]
-            # print(logits)
-            samp_dist = torch.distributions.Categorical(logits=logits)
-            y_sample = samp_dist.sample()
-            loss_sampled = F.cross_entropy(
-                logits.view(-1, logits.size(-1)), y_sample.view(-1), ignore_index=-1
-            )
-            loss_sampled.backward()
-            optimizer.update_hessian()
-            optimizer.zero_grad(set_to_none=True)
-            self.model.zero_grad()
+        # use this code for the pytorch_optimizer implementation:
+        # https://github.com/kozistr/pytorch_optimizer
+        self.optimizer.zero_grad()
+        self.manual_backward(loss, create_graph=True)
+        self.optimizer.step()
+
+        # use this section for the official SophiaG implementation:
+        # https://github.com/Liuhong99/Sophia/tree/main
+        # optimizer = self.optimizers()
+        # loss.backward()
+        # optimizer.step()
+        # optimizer.zero_grad(set_to_none=True)
+        # self.current_step += 1
+        # k = 10
+        # if self.current_step % k == k - 1:
+        #     # update hessian EMA
+        #     logits = self.model(input_ids=batch)["logits"]
+        #     # print(logits)
+        #     samp_dist = torch.distributions.Categorical(logits=logits)
+        #     y_sample = samp_dist.sample()
+        #     loss_sampled = F.cross_entropy(
+        #         logits.view(-1, logits.size(-1)), y_sample.view(-1), ignore_index=-1
+        #     )
+        #     loss_sampled.backward()
+        #     optimizer.update_hessian()
+        #     optimizer.zero_grad(set_to_none=True)
+        #     self.model.zero_grad()
 
         # # Compute gradients using autograd.grad
         # params = list(self.model.parameters())
@@ -671,10 +675,6 @@ class PraxisTrainer(LightningModule):
         # opt.zero_grad()
         # self.manual_backward(loss, create_graph=True, retain_graph=False)
         # opt.step()
-
-        # self.optimizer.zero_grad()
-        # self.manual_backward(loss, create_graph=True)
-        # self.optimizer.step()
 
         # # Manual optimization
         # if (batch_idx + 1) % self.accumulation_steps == 0 or (
@@ -1346,8 +1346,8 @@ if len(hparams["training_data"]["validation"]) > 0:
         )
 
 # create the optimizer
-# optimizer = create_optimizer(model, **hparams["optimizer"])
-optimizer = SophiaG(model.parameters(), lr=1e-4, weight_decay=0.01)
+optimizer = create_optimizer(model, **hparams["optimizer"])
+# optimizer = SophiaG(model.parameters(), lr=1e-4, weight_decay=0.01)
 
 # create the scheduler
 scheduler = scheduler_func(optimizer)
